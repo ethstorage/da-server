@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/blockchaindevsh/da-server/cmd/flag"
 	"github.com/blockchaindevsh/da-server/pkg/da"
@@ -39,5 +43,24 @@ func daStart(ctx *cli.Context) (err error) {
 		return
 	}
 
+	fmt.Println("config", string(configBytes))
+
+	server := da.NewServer(&config)
+	err = server.Start(context.Background())
+	if err != nil {
+		return
+	}
+
+	defer server.Stop(context.Background())
+
+	signals := []os.Signal{
+		os.Interrupt,
+		os.Kill,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	}
+	interruptChannel := make(chan os.Signal, 1)
+	signal.Notify(interruptChannel, signals...)
+	<-interruptChannel
 	return
 }

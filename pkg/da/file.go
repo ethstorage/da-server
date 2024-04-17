@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 )
@@ -16,6 +17,11 @@ type FileStore struct {
 }
 
 func NewFileStore(directory string) *FileStore {
+	err := os.MkdirAll(directory, 0600)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create directory:%s", directory))
+	}
+
 	return &FileStore{
 		directory: directory,
 	}
