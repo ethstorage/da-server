@@ -2,7 +2,7 @@
 $ cat config.json
 
 {
-	"Sequencer": "0x53e80F8Cf25F8c0E93037EaF808C3A68C8440988",
+	"SequencerIP": "127.0.0.1",
 	"ListenAddr": "0.0.0.0:8888",
 	"StorePath":  "/root/da/data"
 }

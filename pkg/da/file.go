@@ -3,14 +3,12 @@ package da
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path"
-)
 
-// ErrNotFound is returned when the server could not find the input.
-var ErrNotFound = errors.New("not found")
+	"github.com/blockchaindevsh/da-server/pkg/da/client"
+)
 
 type FileStore struct {
 	directory string
@@ -31,7 +29,7 @@ func (s *FileStore) Get(ctx context.Context, key []byte) ([]byte, error) {
 	data, err := os.ReadFile(s.fileName(key))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrNotFound
+			return nil, client.ErrNotFound
 		}
 		return nil, err
 	}

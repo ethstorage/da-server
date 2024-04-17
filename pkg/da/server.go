@@ -8,16 +8,17 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/blockchaindevsh/da-server/pkg/da/client"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 type Config struct {
-	Sequencer  common.Address
-	ListenAddr string
-	StorePath  string
+	SequencerIP string
+	ListenAddr  string
+	StorePath   string
 }
 
 type Server struct {
@@ -79,7 +80,7 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input, err := s.store.Get(r.Context(), comm)
-	if err != nil && errors.Is(err, ErrNotFound) {
+	if err != nil && errors.Is(err, client.ErrNotFound) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -94,6 +95,11 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
+
+	if !strings.HasPrefix(r.RemoteAddr, s.config.SequencerIP) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	input, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
