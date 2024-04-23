@@ -40,6 +40,17 @@ func (s *FileStore) Put(ctx context.Context, key []byte, value []byte) error {
 	return os.WriteFile(s.fileName(key), value, 0600)
 }
 
+func (s *FileStore) Exist(key []byte) (exists bool, err error) {
+	_, err = os.Stat(s.fileName(key))
+	if err == nil {
+		return true, nil
+	} else if os.IsNotExist(err) {
+		return false, nil
+	} else {
+		return false, err
+	}
+}
+
 func (s *FileStore) fileName(key []byte) string {
 	return path.Join(s.directory, hex.EncodeToString(key))
 }

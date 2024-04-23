@@ -3,6 +3,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,15 +13,17 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
 type Client struct {
-	url string
+	url    string
+	signer common.Address
 }
 
-func New(url string) *Client {
-	return &Client{url: url}
+func New(url string, signer common.Address) *Client {
+	return &Client{url: url, signer: signer}
 }
 
 const blobSize = 128 * 1024
@@ -97,6 +101,50 @@ func (c *Client) GetBlobs(blobHashes []common.Hash) (blobs []hexutil.Bytes, err 
 			return nil, fmt.Errorf("invalid blob for %s", blobHash)
 		}
 		blobs = append(blobs, blob)
+	}
+
+	return
+}
+
+func (c *Client) DAProof(blobHashes []common.Hash) (proof []byte, err error) {
+
+	jsonPayload, err := json.Marshal(blobHashes)
+	if err != nil {
+		return
+	}
+	url := fmt.Sprintf("%s/daproof", c.url)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get preimage: %v", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	proof, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	md := sha256.New()
+	md.Write(jsonPayload)
+	hash := md.Sum(nil)
+	pubkey, err := crypto.Ecrecover(hash, proof)
+	if err != nil {
+		return nil, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+	if signer != c.signer {
+		return nil, fmt.Errorf("sign not match, expect:%v got:%v", c.signer, signer)
 	}
 
 	return
