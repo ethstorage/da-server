@@ -106,6 +106,34 @@ func (c *Client) GetBlobs(blobHashes []common.Hash) (blobs []hexutil.Bytes, err 
 	return
 }
 
+func (c *Client) CheckDAProof(blobHashes []common.Hash, daProof []byte) error {
+	if (len(blobHashes) == 0) == (len(daProof) != 0) {
+		return fmt.Errorf("blobHashes and daProof should have the same emptiness")
+	}
+	if len(blobHashes) == 0 {
+		return nil
+	}
+
+	jsonPayload, err := json.Marshal(blobHashes)
+	if err != nil {
+		return err
+	}
+
+	md := sha256.New()
+	md.Write(jsonPayload)
+	hash := md.Sum(nil)
+	pubkey, err := crypto.Ecrecover(hash, daProof)
+	if err != nil {
+		return err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+	if signer != c.signer {
+		return fmt.Errorf("sign not match, expect:%v got:%v", c.signer, signer)
+	}
+	return nil
+}
+
 func (c *Client) DAProof(blobHashes []common.Hash) (proof []byte, err error) {
 
 	jsonPayload, err := json.Marshal(blobHashes)
