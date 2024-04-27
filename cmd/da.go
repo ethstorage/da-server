@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/blockchaindevsh/da-server/cmd/flag"
-	"github.com/blockchaindevsh/da-server/pkg/da"
+	"github.com/ethstorage/da-server/cmd/flag"
+	"github.com/ethstorage/da-server/pkg/da"
 	"github.com/urfave/cli"
 )
 

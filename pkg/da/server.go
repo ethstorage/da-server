@@ -15,10 +15,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/blockchaindevsh/da-server/pkg/da/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethstorage/da-server/pkg/da/client"
 )
 
 type Config struct {

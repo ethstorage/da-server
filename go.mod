@@ -1,4 +1,4 @@
-module github.com/blockchaindevsh/da-server
+module github.com/ethstorage/da-server
 
 go 1.21
 

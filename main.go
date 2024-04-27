@@ -5,7 +5,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/blockchaindevsh/da-server/cmd"
+	"github.com/ethstorage/da-server/cmd"
 	"github.com/urfave/cli"
 )
 

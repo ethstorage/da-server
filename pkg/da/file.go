@@ -7,7 +7,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/blockchaindevsh/da-server/pkg/da/client"
+	"github.com/ethstorage/da-server/pkg/da/client"
 )
 
 type FileStore struct {
