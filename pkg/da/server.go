@@ -51,6 +51,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	pkBytes, err := os.ReadFile(s.config.SignerPKPath)
 	if err != nil {
+		err = fmt.Errorf("failed to read SignerPKPath:%w", err)
 		return
 	}
 	pk, err := crypto.ToECDSA(common.FromHex(string(pkBytes)))
