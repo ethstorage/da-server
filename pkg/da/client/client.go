@@ -43,7 +43,7 @@ func (c *Client) UploadBlobs(envelope *eth.ExecutionPayloadEnvelope) error {
 
 		key := blobHash.Hex()
 		body := bytes.NewReader(blob)
-		url := fmt.Sprintf("%s/put/0x%x", c.url, key)
+		url := fmt.Sprintf("%s/put/0x%s", c.url, key)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
 		if err != nil {
 			return fmt.Errorf("NewRequestWithContext failed:%v", err)
@@ -67,7 +67,7 @@ var ErrNotFound = errors.New("not found")
 
 func (c *Client) GetBlobs(blobHashes []common.Hash) (blobs []hexutil.Bytes, err error) {
 	for i, blobHash := range blobHashes {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("%s/get/0x%x", c.url, blobHash.Hex()), nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("%s/get/0x%s", c.url, blobHash.Hex()), nil)
 		if err != nil {
 			return nil, fmt.Errorf("NewRequestWithContext failed: %v", err)
 		}

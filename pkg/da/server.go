@@ -159,7 +159,7 @@ func (s *Server) handleDAProof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var keys []common.Address
+	var keys []common.Hash
 	err = json.Unmarshal(input, &keys)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
