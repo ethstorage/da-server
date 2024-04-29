@@ -68,4 +68,4 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/ethereum-optimism/optimism v1.7.3 => github.com/zhiqiangxu/optimism v0.0.0-20240416012846-10de0dfe4ec5
+replace github.com/ethereum-optimism/optimism v1.7.3 => github.com/blockchaindevsh/optimism v0.0.0-20240427053832-5e2b13f1bd2c
