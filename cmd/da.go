@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethstorage/da-server/cmd/flag"
 	"github.com/ethstorage/da-server/pkg/da"
+	"github.com/ethstorage/da-server/pkg/da/client"
 	"github.com/urfave/cli"
 )
 
@@ -19,6 +22,7 @@ var DACmd = cli.Command{
 	Usage: "da actions",
 	Subcommands: []cli.Command{
 		daStartCmd,
+		daDownloadCmd,
 	},
 }
 
@@ -29,6 +33,16 @@ var daStartCmd = cli.Command{
 		flag.ConfigFlag,
 	},
 	Action: daStart,
+}
+
+var daDownloadCmd = cli.Command{
+	Name:  "download",
+	Usage: "download da blob from server",
+	Flags: []cli.Flag{
+		flag.RPCFlag,
+		flag.BlobHashFlag,
+	},
+	Action: daDownload,
 }
 
 func daStart(ctx *cli.Context) (err error) {
@@ -62,5 +76,28 @@ func daStart(ctx *cli.Context) (err error) {
 	interruptChannel := make(chan os.Signal, 1)
 	signal.Notify(interruptChannel, signals...)
 	<-interruptChannel
+	return
+}
+
+func getBlobHashes(blobHashesString string) (blobHashes []common.Hash) {
+	for _, blobHashHex := range strings.Split(blobHashesString, ",") {
+		blobHashes = append(blobHashes, common.HexToHash(blobHashHex))
+	}
+	return
+}
+
+func daDownload(ctx *cli.Context) (err error) {
+	client := client.New(ctx.String(flag.RPCFlag.Name), common.Address{})
+	blobHashes := getBlobHashes(ctx.String(flag.BlobHashFlag.Name))
+	if len(blobHashes) == 0 {
+		err = fmt.Errorf("none blob hash specified")
+		return
+	}
+	blobs, err := client.GetBlobs(blobHashes)
+	if err != nil {
+		return
+	}
+
+	fmt.Println(blobs)
 	return
 }
