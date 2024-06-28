@@ -87,13 +87,13 @@ func getBlobHashes(blobHashesString string) (blobHashes []common.Hash) {
 }
 
 func daDownload(ctx *cli.Context) (err error) {
-	client := client.New(ctx.String(flag.RPCFlag.Name), common.Address{})
+	client := client.New([]string{ctx.String(flag.RPCFlag.Name)})
 	blobHashes := getBlobHashes(ctx.String(flag.BlobHashFlag.Name))
 	if len(blobHashes) == 0 {
 		err = fmt.Errorf("none blob hash specified")
 		return
 	}
-	blobs, err := client.GetBlobs(blobHashes)
+	blobs, err := client.GetBlobs(context.Background(), blobHashes)
 	if err != nil {
 		return
 	}

@@ -3,8 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,22 +11,24 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"golang.org/x/sync/errgroup"
 )
 
 type Client struct {
-	url    string
-	signer common.Address
+	urls []string
 }
 
-func New(url string, signer common.Address) *Client {
-	return &Client{url: url, signer: signer}
+func New(urls []string) *Client {
+	if len(urls) == 0 {
+		panic("empty urls")
+	}
+	return &Client{urls: urls}
 }
 
 const blobSize = 128 * 1024
 
-func (c *Client) UploadBlobs(envelope *eth.ExecutionPayloadEnvelope) error {
+func (c *Client) UploadBlobs(ctx context.Context, envelope *eth.ExecutionPayloadEnvelope) error {
 
 	if len(envelope.BlobsBundle.Commitments) != len(envelope.BlobsBundle.Blobs) {
 		return fmt.Errorf("invvalid envelope")
@@ -41,33 +41,64 @@ func (c *Client) UploadBlobs(envelope *eth.ExecutionPayloadEnvelope) error {
 		}
 		blobHash := eth.KZGToVersionedHash(kzg4844.Commitment(envelope.BlobsBundle.Commitments[i]))
 
-		key := blobHash.Hex()
-		body := bytes.NewReader(blob)
-		url := fmt.Sprintf("%s/put/%s", c.url, key)
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
-		if err != nil {
-			return fmt.Errorf("NewRequestWithContext failed:%v", err)
+		if len(c.urls) == 1 {
+			err := c.uploadBlobTo(ctx, blob, blobHash, 0)
+			if err != nil {
+				return err
+			}
+			continue
 		}
-		req.Header.Set("Content-Type", "application/octet-stream")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
+
+		// when there're multiple urls, upload blobs concurrently.
+		g, ctx := errgroup.WithContext(ctx)
+		for i := 0; i < len(c.urls); i++ {
+			i := i
+			g.Go(func() error {
+				return c.uploadBlobTo(ctx, blob, blobHash, i)
+			})
+		}
+		if err := g.Wait(); err != nil {
 			return err
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed to store preimage: %v", resp.StatusCode)
-		}
+
 	}
 
+	return nil
+}
+
+func (c *Client) uploadBlobTo(ctx context.Context, blob hexutil.Bytes, blobHash common.Hash, i int) error {
+	key := blobHash.Hex()
+	body := bytes.NewReader(blob)
+	url := fmt.Sprintf("%s/put/%s", c.urls[i], key)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	if err != nil {
+		return fmt.Errorf("NewRequestWithContext failed:%v", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to store preimage: %v", resp.StatusCode)
+	}
 	return nil
 }
 
 // ErrNotFound is returned when the server could not find the input.
 var ErrNotFound = errors.New("not found")
 
-func (c *Client) GetBlobs(blobHashes []common.Hash) (blobs []hexutil.Bytes, err error) {
+func (c *Client) GetBlobs(ctx context.Context, blobHashes []common.Hash) (blobs []hexutil.Bytes, err error) {
+	return c.GetBlobsFrom(ctx, blobHashes, 0)
+}
+
+func (c *Client) GetBlobsFrom(ctx context.Context, blobHashes []common.Hash, i int) (blobs []hexutil.Bytes, err error) {
+	if i >= len(c.urls) {
+		return nil, fmt.Errorf("index out of range")
+	}
 	for i, blobHash := range blobHashes {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("%s/get/%s", c.url, blobHash.Hex()), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/get/%s", c.urls[i], blobHash.Hex()), nil)
 		if err != nil {
 			return nil, fmt.Errorf("NewRequestWithContext failed: %v", err)
 		}
@@ -101,78 +132,6 @@ func (c *Client) GetBlobs(blobHashes []common.Hash) (blobs []hexutil.Bytes, err 
 			return nil, fmt.Errorf("invalid blob for %s", blobHash)
 		}
 		blobs = append(blobs, blob)
-	}
-
-	return
-}
-
-func (c *Client) CheckDAProof(blobHashes []common.Hash, daProof []byte) error {
-	if (len(blobHashes) == 0) == (len(daProof) != 0) {
-		return fmt.Errorf("blobHashes and daProof should have the same emptiness")
-	}
-	if len(blobHashes) == 0 {
-		return nil
-	}
-
-	jsonPayload, err := json.Marshal(blobHashes)
-	if err != nil {
-		return err
-	}
-
-	md := sha256.New()
-	md.Write(jsonPayload)
-	hash := md.Sum(nil)
-	pubkey, err := crypto.Ecrecover(hash, daProof)
-	if err != nil {
-		return err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	if signer != c.signer {
-		return fmt.Errorf("sign not match, expect:%v got:%v", c.signer, signer)
-	}
-	return nil
-}
-
-func (c *Client) DAProof(blobHashes []common.Hash) (proof []byte, err error) {
-
-	jsonPayload, err := json.Marshal(blobHashes)
-	if err != nil {
-		return
-	}
-	url := fmt.Sprintf("%s/daproof", c.url)
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get preimage: %v", resp.StatusCode)
-	}
-	defer resp.Body.Close()
-	proof, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	md := sha256.New()
-	md.Write(jsonPayload)
-	hash := md.Sum(nil)
-	pubkey, err := crypto.Ecrecover(hash, proof)
-	if err != nil {
-		return nil, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	if signer != c.signer {
-		return nil, fmt.Errorf("sign not match, expect:%v got:%v", c.signer, signer)
 	}
 
 	return
