@@ -124,7 +124,7 @@ func (c *Client) GetBlobsFrom(ctx context.Context, blobHashes []common.Hash, i i
 
 		var fixedBlob kzg4844.Blob
 		copy(fixedBlob[:], blob)
-		commit, err := kzg4844.BlobToCommitment(fixedBlob)
+		commit, err := kzg4844.BlobToCommitment(&fixedBlob)
 		if err != nil {
 			return nil, fmt.Errorf("BlobToCommitment failed:%w, index:%d", err, i)
 		}
