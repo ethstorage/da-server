@@ -10,7 +10,9 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethstorage/da-server/pkg/da/client"
 )
@@ -19,24 +21,37 @@ type Config struct {
 	SequencerIP string
 	ListenAddr  string
 	StorePath   string
+	Relay       Relay
 }
 
+const DefaultRetry = 5
+
+type Relay struct {
+	Nodes []string
+	Retry int
+}
 type Server struct {
 	sync.WaitGroup
 	config     *Config
 	httpServer *http.Server
 	listener   net.Listener
 	store      *FileStore
+	client     *client.Client
 }
 
 func NewServer(config *Config) *Server {
-	return &Server{
+	s := &Server{
 		config: config,
 		httpServer: &http.Server{
 			Addr: config.ListenAddr,
 		},
 		store: NewFileStore(config.StorePath),
 	}
+
+	if len(config.Relay.Nodes) > 0 {
+		s.client = client.New(config.Relay.Nodes)
+	}
+	return s
 }
 
 func (s *Server) Start(ctx context.Context) (err error) {
@@ -123,4 +138,30 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	if s.client != nil {
+		go func() {
+			s.syncBlobToRelays(common.BytesToHash(comm), hexutil.Bytes(input))
+		}()
+	}
+}
+
+func (s *Server) syncBlobToRelays(comm common.Hash, blob hexutil.Bytes) {
+	retry := s.config.Relay.Retry
+	if retry <= 0 {
+		retry = DefaultRetry
+	}
+
+	for i := 0; i < retry; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		err := s.client.SyncBlob(ctx, comm, blob)
+		if err != nil {
+			fmt.Printf("SyncBlob failed, comm:%s i: %d\n", comm.Hex(), i)
+		} else {
+			fmt.Printf("blob sync successfully, comm:%s\n", comm.Hex())
+			return
+		}
+	}
+	fmt.Printf("failed to sync, comm:%s\n", comm.Hex())
 }
