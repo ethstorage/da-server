@@ -81,7 +81,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 func (s *Server) expireData(ctx context.Context) {
 	if s.config.ExpireHours <= 0 {
-		panic("expireData should only be called when ExpireDays>0")
+		panic("expireData should only be called when ExpireHours>0")
 	}
 
 	ticker := time.NewTicker(time.Hour)
