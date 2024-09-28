@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net"
 	"net/http"
-	"os"
+	"os/exec"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -89,27 +87,18 @@ func (s *Server) expireData(ctx context.Context) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 
+	bashCmd := fmt.Sprintf("find %s -type f -mmin +%d -exec rm {} +", s.config.StorePath, s.config.ExpireHours*60)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			err := filepath.Walk(s.config.StorePath, func(path string, info fs.FileInfo, err error) error {
-				if info.IsDir() {
-					return nil
-				}
-
-				if time.Since(info.ModTime()) > time.Duration(s.config.ExpireHours)*time.Hour {
-					fmt.Printf("deleting file %s, mod time: %v\n", path, info.ModTime())
-					err := os.Remove(path)
-					if err != nil {
-						fmt.Printf("failed to delete file %s, error: %v\n", path, err)
-					}
-				}
-				return nil
-			})
+			cmd := exec.Command("bash", "-c", bashCmd)
+			output, err := cmd.CombinedOutput()
 			if err != nil {
-				fmt.Printf("filepath.Walk failed, error: %v\n", err)
+				fmt.Printf("failed to prune expired files, err: %v, detail:%s\n", err, string(output))
+			} else {
+				fmt.Printf("prune ran successfully at %v\n", time.Now())
 			}
 		}
 	}
