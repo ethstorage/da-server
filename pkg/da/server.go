@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethstorage/da-server/pkg/da/client"
@@ -19,6 +23,7 @@ type Config struct {
 	SequencerIP string
 	ListenAddr  string
 	StorePath   string
+	ExpireHours int64
 }
 
 type Server struct {
@@ -27,6 +32,7 @@ type Server struct {
 	httpServer *http.Server
 	listener   net.Listener
 	store      *FileStore
+	cancel     context.CancelFunc
 }
 
 func NewServer(config *Config) *Server {
@@ -62,12 +68,62 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		}
 	}()
 
+	ctx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+	if s.config.ExpireHours > 0 {
+		s.Add(1)
+		go func() {
+			defer s.Done()
+			s.expireData(ctx)
+		}()
+	}
+
 	return
 }
 
-func (s *Server) Stop(ctx context.Context) (err error) {
+func (s *Server) expireData(ctx context.Context) {
+	if s.config.ExpireHours <= 0 {
+		panic("expireData should only be called when ExpireHours>0")
+	}
 
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// alternatively, we can use such command for manual operation on linux to prune files older than 7 days:
+			// 	find target_dir -type f -mmin +10080 -exec rm {} +
+			err := filepath.Walk(s.config.StorePath, func(path string, info fs.FileInfo, err error) error {
+				if info.IsDir() {
+					return nil
+				}
+
+				if time.Since(info.ModTime()) > time.Duration(s.config.ExpireHours)*time.Hour {
+					fmt.Printf("deleting file %s, mod time: %v\n", path, info.ModTime())
+					err := os.Remove(path)
+					if err != nil {
+						fmt.Printf("failed to delete file %s, error: %v\n", path, err)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				fmt.Printf("filepath.Walk failed, error: %v\n", err)
+			}
+		}
+	}
+}
+
+func (s *Server) Stop(ctx context.Context) (err error) {
+	s.cancel()
 	err = s.httpServer.Shutdown(ctx)
+	if err != nil {
+		return
+	}
+	s.Wait()
 	return
 }
 
