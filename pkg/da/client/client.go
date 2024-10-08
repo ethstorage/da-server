@@ -28,6 +28,7 @@ func New(urls []string) *Client {
 
 const blobSize = 128 * 1024
 
+// UploadBlobs is for sequencer to upload Blob.
 func (c *Client) UploadBlobs(ctx context.Context, envelope *eth.ExecutionPayloadEnvelope) error {
 
 	if len(envelope.BlobsBundle.Commitments) != len(envelope.BlobsBundle.Blobs) {
@@ -41,28 +42,41 @@ func (c *Client) UploadBlobs(ctx context.Context, envelope *eth.ExecutionPayload
 		}
 		blobHash := eth.KZGToVersionedHash(kzg4844.Commitment(envelope.BlobsBundle.Commitments[i]))
 
-		if len(c.urls) == 1 {
-			err := c.uploadBlobTo(ctx, blob, blobHash, 0)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		// when there're multiple urls, upload blobs concurrently.
-		g, ctx := errgroup.WithContext(ctx)
-		for i := 0; i < len(c.urls); i++ {
-			i := i
-			g.Go(func() error {
-				return c.uploadBlobTo(ctx, blob, blobHash, i)
-			})
-		}
-		if err := g.Wait(); err != nil {
+		err := c.uploadBlob(ctx, blob, blobHash)
+		if err != nil {
 			return err
 		}
 
 	}
 
+	return nil
+}
+
+// SyncBlob is to sync Blobs to relays.
+func (c *Client) SyncBlob(ctx context.Context, comm common.Hash, blob hexutil.Bytes) error {
+	if len(blob) != blobSize {
+		return fmt.Errorf("invalid blob size:%d", len(blob))
+	}
+	return c.uploadBlob(ctx, blob, comm)
+}
+
+func (c *Client) uploadBlob(ctx context.Context, blob hexutil.Bytes, blobHash common.Hash) error {
+	if len(c.urls) == 1 {
+		err := c.uploadBlobTo(ctx, blob, blobHash, 0)
+		return err
+	}
+
+	// when there're multiple urls, upload blobs concurrently.
+	g, ctx := errgroup.WithContext(ctx)
+	for i := 0; i < len(c.urls); i++ {
+		i := i
+		g.Go(func() error {
+			return c.uploadBlobTo(ctx, blob, blobHash, i)
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
 	return nil
 }
 
