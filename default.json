@@ -1,0 +1,6 @@
+{
+	"SequencerIP": "",
+	"ListenAddr": "0.0.0.0:8888",
+	"StorePath":  "/root/da/data",
+	"SignerPKPath": "/root/da/pk"
+}
