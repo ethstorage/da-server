@@ -16,3 +16,8 @@ var BlobHashFlag = cli.StringFlag{
 	Name:  "blob_hash",
 	Usage: "specify blob hash flag",
 }
+
+var SequencerIPFlag = cli.StringFlag{
+	Name:  "sequencer_ip",
+	Usage: "specify sequencer_ip that overrides the one in config",
+}
