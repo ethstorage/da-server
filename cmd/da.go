@@ -31,6 +31,7 @@ var daStartCmd = cli.Command{
 	Usage: "start da server",
 	Flags: []cli.Flag{
 		flag.ConfigFlag,
+		flag.SequencerIPFlag,
 	},
 	Action: daStart,
 }
@@ -55,6 +56,9 @@ func daStart(ctx *cli.Context) (err error) {
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
 		return
+	}
+	if ctx.String(flag.SequencerIPFlag.Name) != "" {
+		config.SequencerIP = ctx.String(flag.SequencerIPFlag.Name)
 	}
 
 	fmt.Println("config", string(configBytes))
