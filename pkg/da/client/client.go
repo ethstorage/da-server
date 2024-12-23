@@ -107,12 +107,12 @@ func (c *Client) GetBlobs(ctx context.Context, blobHashes []common.Hash) (blobs 
 	return c.GetBlobsFrom(ctx, blobHashes, 0)
 }
 
-func (c *Client) GetBlobsFrom(ctx context.Context, blobHashes []common.Hash, i int) (blobs []hexutil.Bytes, err error) {
-	if i >= len(c.urls) {
+func (c *Client) GetBlobsFrom(ctx context.Context, blobHashes []common.Hash, idx int) (blobs []hexutil.Bytes, err error) {
+	if idx >= len(c.urls) {
 		return nil, fmt.Errorf("index out of range")
 	}
 	for i, blobHash := range blobHashes {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/get/%s", c.urls[i], blobHash.Hex()), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/get/%s", c.urls[idx], blobHash.Hex()), nil)
 		if err != nil {
 			return nil, fmt.Errorf("NewRequestWithContext failed: %v", err)
 		}
