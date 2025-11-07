@@ -15,7 +15,7 @@ type FileStore struct {
 }
 
 func NewFileStore(directory string) *FileStore {
-	err := os.MkdirAll(directory, 0600)
+	err := os.MkdirAll(directory, 0755)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create directory:%s", directory))
 	}
